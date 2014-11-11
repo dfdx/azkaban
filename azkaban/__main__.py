@@ -4,6 +4,7 @@
 """Azkaban CLI: a lightweight command line interface for Azkaban.
 
 Usage:
+  azkaban create [-a ALIAS | -u URL] PROJECT
   azkaban build [-cp PROJECT] [-a ALIAS | -u URL | [-r] ZIP] [-o OPTION ...]
   azkaban info [-p PROJECT] [-f | -o OPTION ... | [-i] JOB ...]
   azkaban log [-a ALIAS | -u URL] EXECUTION [JOB]
@@ -18,6 +19,7 @@ Usage:
   azkaban -h | --help | -l | --log | -v | --version
 
 Commmands:
+  create                        Create project if it doesn't exist.
   build*                        Build project and upload to Azkaban or save
                                 locally the resulting archive.
   info*                         View information about jobs or files.
@@ -377,6 +379,16 @@ def wait_workflow(project_name, _flow, _url, _alias, _wait):
     sys.stderr.write('Faild to stop workflow %s during %s seconds.\n' % (_flow, _wait))
     sys.exit(-1)
 
+def create_project(project_name, _url, _alias):
+  """Create project if it doesn't exist"""
+  session = Session(_url, _alias)
+  try: 
+    session.create_project(project_name, project_name)
+  except AzkabanError:
+    sys.stdout.write('Project %s already exists, nothing to do.\n' % (project_name, ))
+  else: 
+    sys.stdout.write('Project %s created.\n' % (project_name, ))
+
 def upload_project(project_name, _zip, _url, _alias, _create):
   """Upload project."""
   session = Session(_url, _alias)
@@ -475,6 +487,14 @@ def main(argv=None):
       sys.stdout.write('%s\n' % (handler.baseFilename, ))
     else:
       raise AzkabanError('No log file active.')
+  elif args['create']:    
+    create_project(
+      args['PROJECT'],
+      **_forward(
+        args,
+        ['--url', '--alias']
+      )
+    )
   elif args['build']:
     build_project(
       _load_project(args['--project']),
