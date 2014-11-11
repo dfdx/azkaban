@@ -12,6 +12,8 @@ Usage:
   azkaban schedule [-bkp PROJECT] [-a ALIAS | -u URL] [-e EMAIL ...]
                    [-o OPTION ...] [-s SPAN] (-d DATE) (-t TIME)
                    FLOW [JOB ...]
+  azkaban unschedule [-bkp PROJECT] [-a ALIAS | -u URL] FLOW
+  azkaban wait [-bkp PROJECT] [-a ALIAS | -u URL] [--wait TIME] FLOW
   azkaban upload [-cp PROJECT] [-a ALIAS | -u URL] ZIP
   azkaban -h | --help | -l | --log | -v | --version
 
@@ -24,6 +26,9 @@ Commmands:
                                 the entire workflow will be executed.
   schedule                      Schedule a workflow to be run at a specified
                                 date and time.
+  unschedule                    Unschedule a workflow
+  wait                          Block execution till workflow is stopped or
+                                timeout is reached
   upload                        Upload archive to Azkaban server.
 
 Arguments:
@@ -77,6 +82,7 @@ Options:
                                 will be run only once.
   -t TIME --time=TIME           Time when a schedule should be run. Must be of
                                 the format `hh,mm,(AM|PM),(PDT|UTC|..)`.
+  -w --wait WAITTIME             Maximum time to wait till workflow is stopped.
   -u URL --url=URL              Azkaban endpoint (with protocol, and optionally
                                 a username): '[user@]protocol:endpoint'. E.g.
                                 'http://azkaban.server'. The username defaults
@@ -97,6 +103,7 @@ from azkaban.util import (AzkabanError, Config, catch, flatten, human_readable,
 from docopt import docopt
 from requests.exceptions import HTTPError
 import logging as lg
+import time
 import os
 import os.path as osp
 import sys
@@ -343,6 +350,33 @@ def schedule_workflow(project_name, _date, _time, _span, _flow, _job, _url,
     'Flow %s scheduled successfully.\n' % (_flow, )
   )
 
+def unschedule_workflow(project_name, _flow, _url, _alias):
+  """Unschedule workflow."""
+  session = Session(_url, _alias)
+  session.unschedule_workflow(
+    name=project_name,
+    flow=_flow
+  )
+  sys.stdout.write(
+    'Flow %s unscheduled successfully.\n' % (_flow, )
+  )
+
+def wait_workflow(project_name, _flow, _url, _alias, _wait):
+  """Block execution until workflow is finished or max wait time is passed."""
+  timeout = int(_wait)
+  session = Session(_url, _alias)
+  running = session.get_running(project_name, _flow).has_key('execIds')
+  while running and timeout > 0:
+    sys.stdout.write('Flow %s is running, waiting...\n' % (_flow, ))
+    time.sleep(1)
+    timeout -= 1
+    running = session.get_running(project_name, _flow).has_key('execIds')
+  if not running: 
+    sys.stdout.write('Flow %s is not running now.\n' % (_flow, ))
+  else:
+    sys.stderr.write('Faild to stop workflow %s during %s seconds.\n' % (_flow, _wait))
+    sys.exit(-1)
+
 def upload_project(project_name, _zip, _url, _alias, _create):
   """Upload project."""
   session = Session(_url, _alias)
@@ -433,7 +467,7 @@ def main(argv=None):
   # parse arguments
   argv = argv or sys.argv[1:]
   _logger.debug('Running command %r from %r.', ' '.join(argv), os.getcwd())
-  args = docopt(__doc__, version=__version__)
+  args = docopt(__doc__, argv, version=__version__)
   CLI_ARGS.update(args)
   # do things
   if args['--log']:
@@ -477,6 +511,26 @@ def main(argv=None):
         [
           'FLOW', 'JOB', '--bounce', '--url', '--alias', '--kill',
           '--email', '--option', '--date', '--time', '--span'
+        ]
+      )
+    )
+  elif args['unschedule']:
+    unschedule_workflow(
+      _get_project_name(args['--project']),
+      **_forward(
+        args,
+        [
+          'FLOW', '--url', '--alias'
+        ]
+      )
+    )
+  elif args['wait']:
+    wait_workflow(
+      _get_project_name(args['--project']),
+      **_forward(
+        args,
+        [
+          'FLOW', '--url', '--alias', '--wait'
         ]
       )
     )
