@@ -355,13 +355,19 @@ def schedule_workflow(project_name, _date, _time, _span, _flow, _job, _url,
 def unschedule_workflow(project_name, _flow, _url, _alias):
   """Unschedule workflow."""
   session = Session(_url, _alias)
-  session.unschedule_workflow(
-    name=project_name,
-    flow=_flow
-  )
-  sys.stdout.write(
-    'Flow %s unscheduled successfully.\n' % (_flow, )
-  )
+  try:
+    session.unschedule_workflow(
+      name=project_name,
+      flow=_flow
+    )
+  except AzkabanError:
+    sys.stdout.write(
+      'Flow %s is not scheduled, nothing to do.\n' % (_flow, )
+    )
+  else:
+    sys.stdout.write(
+      'Flow %s unscheduled successfully.\n' % (_flow, )
+    )
 
 def wait_workflow(project_name, _flow, _url, _alias, _wait):
   """Block execution until workflow is finished or max wait time is passed."""
